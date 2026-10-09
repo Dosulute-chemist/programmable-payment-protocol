@@ -45,7 +45,7 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard, Pausable {
     address public paymentSystem;
     uint256 public escrowCount;
 
-    mapping(uint256 => Escrow) public escrows;
+    mapping(uint256 => Escrow) private escrows;
     mapping(address => uint256) public totalEscrowed;
     mapping(address => uint256) public totalClaimable;
     mapping(address => mapping(address => uint256)) public claimable;
