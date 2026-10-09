@@ -25,3 +25,58 @@ contract MockTradeAdapter is ITradeAdapter {
         return outputAmount;
     }
 }
+
+interface IClaimableEscrow {
+    function withdrawClaimable(address token, address payable recipient) external;
+}
+
+contract RejectingClaimRecipient {
+    receive() external payable { revert("RejectingClaimRecipient: reject native"); }
+
+    function withdrawFrom(address escrow, address payable destination) external {
+        IClaimableEscrow(escrow).withdrawClaimable(address(0), destination);
+    }
+}
+
+contract FeeOnTransferToken is ERC20 {
+    constructor() ERC20("Fee Token", "FEE") {}
+
+    function mint(address to, uint256 amount) external { _mint(to, amount); }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0) && value > 1) {
+            uint256 fee = value / 100;
+            super._update(from, address(0xdead), fee);
+            super._update(from, to, value - fee);
+        } else {
+            super._update(from, to, value);
+        }
+    }
+}
+
+contract DishonestTradeAdapter is ITradeAdapter {
+    using SafeERC20 for IERC20;
+
+    uint256 public actualOutput;
+    uint256 public reportedOutput;
+    bool public skipInputSpend;
+
+    function configure(uint256 actual, uint256 reported, bool skipInput) external {
+        actualOutput = actual;
+        reportedOutput = reported;
+        skipInputSpend = skipInput;
+    }
+
+    function executeTrade(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256,
+        address recipient,
+        uint256
+    ) external returns (uint256) {
+        if (!skipInputSpend) IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        IERC20(tokenOut).safeTransfer(recipient, actualOutput);
+        return reportedOutput;
+    }
+}
