@@ -285,8 +285,32 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard, Pausable {
         emit ClaimableWithdrawn(msg.sender, token, recipient, amount);
     }
 
-    function getEscrow(uint256 escrowId) external view returns (Escrow memory) {
-        return _getEscrow(escrowId);
+    /// @notice Return only the status to keep the ABI response small.
+    function getEscrow(uint256 escrowId) external view returns (EscrowStatus) {
+        return _getEscrow(escrowId).status;
+    }
+
+    function getEscrowPartiesAndAsset(uint256 escrowId)
+        external view returns (address payer, address recipient, address token, uint256 amount)
+    {
+        Escrow storage escrow = _getEscrow(escrowId);
+        return (escrow.payer, escrow.recipient, escrow.token, escrow.amount);
+    }
+
+    function getEscrowTerms(uint256 escrowId)
+        external view returns (SettlementMode mode, uint256 deadline, address resolver,
+            bytes32 agreementReference, uint256 createdAt)
+    {
+        Escrow storage escrow = _getEscrow(escrowId);
+        return (escrow.mode, escrow.deadline, escrow.resolver,
+            escrow.agreementReference, escrow.createdAt);
+    }
+
+    function getEscrowDispute(uint256 escrowId)
+        external view returns (bytes32 reasonHash, uint256 disputedAt)
+    {
+        Escrow storage escrow = _getEscrow(escrowId);
+        return (escrow.disputeReason, escrow.disputedAt);
     }
 
     function isSolvent(address token) external view returns (bool) {
