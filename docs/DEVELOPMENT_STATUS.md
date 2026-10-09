@@ -4,48 +4,44 @@ Last updated: 2026-10-09
 
 ## Current stage
 
-**Stage: Initial Solidity structure and contract implementation.**
+**Stage: Initial implementation, security hardening, and automated CI setup.**
 
-The first Solidity files and project configuration have been committed. They are initial implementation drafts and have **not** been compiled, tested, audited, or deployed as a complete system.
+The contracts and initial Foundry tests are committed. A GitHub Actions workflow now installs a pinned OpenZeppelin Contracts version, builds the contracts, and runs the test suite. The workflow must report success before the code can be called compiled and tested.
 
 ## Milestones
 
 | Area | Status | Notes |
 |---|---|---|
-| Project overview | Documented | Initial vision and scope recorded |
-| Architecture | Documented | Proposed modules and boundaries recorded |
-| Contract specifications | Drafted | Must be checked against implementation and reviewed |
-| Asset support policy | Drafted | No production asset registry yet |
-| Security checklist | Drafted | Not an audit |
-| Foundry configuration | Added | Solidity 0.8.24 configured; dependencies still need to be installed and pinned |
-| PaymentSystem | Initial implementation added | Needs compilation, review, and tests |
-| EscrowManager | Initial implementation added | Needs compilation, review, and tests; settlement rules are intentionally limited in this version |
-| TradeExecutor | Initial atomic-swap implementation added | Needs compilation, review, and tests |
+| Project overview and architecture | Documented | Initial scope and module boundaries recorded |
+| Solidity project configuration | Added | Solidity 0.8.24 and optimizer configuration |
+| OpenZeppelin dependency | CI pin added | v5.4.0; workflow install/build result must be checked |
+| PaymentSystem | Implemented draft | Token allowlist, fee-accounting correction, transfer balance checks; not audited |
+| EscrowManager | Implemented draft | Per-asset locked-liability accounting and balance checks added; settlement design still limited |
+| TradeExecutor | Implemented draft | Atomic swap path, adapter allowlist, input/output checks; no real DEX adapter |
+| Unit/integration tests | Initial tests added | Must be run in CI and expanded with fuzz/invariant coverage |
+| CI | Added | .github/workflows/solidity.yml runs forge build --sizes and forge test -vvv |
+| Security review | Preliminary notes added | Not an independent audit |
 | DEX adapter | Interface only | No real protocol-specific adapter implemented yet |
-| Tests | Test plan added; tests not implemented or run | Must be added and run |
-| Indexer/API | Planned | Off-chain service design and implementation remain outstanding |
+| Indexer/API | Planned | Not implemented |
 | Deployment | Not deployed | No testnet or production deployment claimed |
-| Audit | Not audited | No independent audit claimed |
+| Independent audit | Not audited | Required before production use |
 
-## Next actions
+## Immediate next actions
 
-1. Install and pin the OpenZeppelin Contracts dependency.
-2. Compile all contracts and resolve compiler errors.
-3. Review fee semantics, escrow settlement rules, operation linkage, and asset assumptions.
-4. Add unit tests and cross-contract integration tests.
-5. Select the first target network and DEX before implementing an adapter.
-6. Implement a real adapter and test it on a test network.
-7. Build the indexer and integrator examples after event fields and ABIs stabilize.
-
-Update this document whenever a milestone changes, and link to test runs or review evidence when available.
+1. Confirm the latest GitHub Actions run succeeded.
+2. Fix any compiler or test failures revealed by CI.
+3. Add adversarial tests: reentrant recipients, reverting recipients, malicious/non-standard tokens, multiple concurrent escrows per asset, and malicious adapters.
+4. Add fuzz and invariant tests for escrow liabilities and atomic trade accounting.
+5. Add two-step ownership transfer and decide multisig/timelock/pause requirements.
+6. Select a chain and DEX before implementing a real adapter.
+7. Obtain independent security review and audit before considering real funds.
 
 ## Status definitions
 
-- **Planned:** documented but not implemented.
 - **Implemented:** code exists.
-- **Compiled:** the chosen compiler/dependencies build successfully.
-- **Tested:** the stated test suite has passed.
+- **Compiled:** CI build completed successfully for a specific commit.
+- **Tested:** the stated test suite passed for that commit.
 - **Testnet deployed:** deployed to a named test network with recorded addresses.
-- **Audited:** reviewed by a named independent auditor with a public report.
+- **Audited:** independent audit report exists for the exact release code.
 
 These labels must not be used interchangeably.
