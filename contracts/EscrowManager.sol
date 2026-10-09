@@ -155,22 +155,24 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard, Pausable {
         }
 
         totalEscrowed[token] += amount;
-        escrowId = escrowCount++;
-        escrows[escrowId] = Escrow({
-            id: escrowId,
-            payer: payer,
-            recipient: recipient,
-            token: token,
-            amount: amount,
-            mode: mode,
-            deadline: deadline,
-            resolver: resolver,
-            status: EscrowStatus.Locked,
-            agreementReference: agreementReference,
-            disputeReason: bytes32(0),
-            createdAt: block.timestamp,
-            disputedAt: 0
-        });
+        escrowId = escrowCount;
+        escrowCount += 1;
+
+        // Assign storage fields individually to keep the IR compiler's live stack small.
+        Escrow storage created = escrows[escrowId];
+        created.id = escrowId;
+        created.payer = payer;
+        created.recipient = recipient;
+        created.token = token;
+        created.amount = amount;
+        created.mode = mode;
+        created.deadline = deadline;
+        created.resolver = resolver;
+        created.status = EscrowStatus.Locked;
+        created.agreementReference = agreementReference;
+        created.disputeReason = bytes32(0);
+        created.createdAt = block.timestamp;
+        created.disputedAt = 0;
 
         emit EscrowCreated(escrowId, payer, recipient, token, amount, mode, deadline,
             resolver, agreementReference);
