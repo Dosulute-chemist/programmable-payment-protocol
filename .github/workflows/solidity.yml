@@ -1,0 +1,23 @@
+name: Solidity CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install OpenZeppelin Contracts
+        run: forge install OpenZeppelin/openzeppelin-contracts --no-commit
+      - name: Build contracts
+        run: forge build --sizes
+      - name: Run tests
+        run: forge test -vvv
