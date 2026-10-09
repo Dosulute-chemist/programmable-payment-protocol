@@ -67,14 +67,14 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
     }
 
     constructor(address initialPaymentSystem) {
-        require(initialPaymentSystem != address(0), "EscrowManager: invalid PaymentSystem");
+        require(initialPaymentSystem != address(0) && initialPaymentSystem.code.length > 0, "EscrowManager: invalid PaymentSystem");
         owner = msg.sender;
         paymentSystem = initialPaymentSystem;
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
     function updatePaymentSystem(address newPaymentSystem) external onlyOwner {
-        require(newPaymentSystem != address(0), "EscrowManager: invalid PaymentSystem");
+        require(newPaymentSystem != address(0) && newPaymentSystem.code.length > 0, "EscrowManager: invalid PaymentSystem");
         address old = paymentSystem;
         paymentSystem = newPaymentSystem;
         emit PaymentSystemUpdated(old, newPaymentSystem);
