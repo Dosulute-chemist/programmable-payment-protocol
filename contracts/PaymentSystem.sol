@@ -10,15 +10,11 @@ import "./interfaces/ITradeExecutor.sol";
 
 /// @title PaymentSystem
 /// @notice Main entry point for direct payments and routed escrow/trade operations.
-/// @dev Initial implementation; not audited and not intended for real funds.
+/// @dev Initial security-hardened draft. Not audited; do not use with real funds.
 contract PaymentSystem is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    enum PaymentType {
-        Direct,
-        Escrow,
-        Trade
-    }
+    enum PaymentType { Direct, Escrow, Trade }
 
     uint256 public constant FEE_BPS = 1; // 0.01%
     uint256 public constant BPS_DENOMINATOR = 10_000;
@@ -29,12 +25,15 @@ contract PaymentSystem is ReentrancyGuard {
     address public tradeExecutor;
     uint256 public paymentCount;
 
+    // ERC-20s must be explicitly enabled by the owner. Native currency uses address(0).
+    mapping(address => bool) public supportedTokens;
+
     struct Payment {
         uint256 id;
         address payer;
         address recipient;
         address asset;
-        uint256 amount;
+        uint256 amount; // net amount delivered/locked; trade input amount for Trade records
         uint256 fee;
         PaymentType paymentType;
         bytes32 paymentReference;
@@ -59,6 +58,7 @@ contract PaymentSystem is ReentrancyGuard {
     event EscrowManagerUpdated(address indexed oldAddress, address indexed newAddress);
     event TradeExecutorUpdated(address indexed oldAddress, address indexed newAddress);
     event FeeCollectorUpdated(address indexed oldAddress, address indexed newAddress);
+    event TokenSupportUpdated(address indexed token, bool supported);
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -87,6 +87,12 @@ contract PaymentSystem is ReentrancyGuard {
         emit TradeExecutorUpdated(old, newExecutor);
     }
 
+    function setTokenSupported(address token, bool supported) external onlyOwner {
+        require(token != address(0), "PaymentSystem: native asset uses address zero");
+        supportedTokens[token] = supported;
+        emit TokenSupportUpdated(token, supported);
+    }
+
     function updateFeeCollector(address newCollector) external onlyOwner {
         require(newCollector != address(0), "PaymentSystem: invalid fee collector");
         address old = feeCollector;
@@ -103,10 +109,7 @@ contract PaymentSystem is ReentrancyGuard {
 
     /// @notice Pay a recipient in the native asset. The fee is deducted from msg.value.
     function payNative(address payable recipient, bytes32 paymentReference)
-        external
-        payable
-        nonReentrant
-        returns (uint256 paymentId)
+        external payable nonReentrant returns (uint256 paymentId)
     {
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(msg.value > 0, "PaymentSystem: zero amount");
@@ -129,15 +132,12 @@ contract PaymentSystem is ReentrancyGuard {
         }
     }
 
-    /// @notice Pay a recipient in an ERC-20 token. Amount is the gross amount debited.
-    /// @dev The recipient receives amount - fee; the fee collector receives fee.
-    function payToken(
-        address token,
-        address recipient,
-        uint256 amount,
-        bytes32 paymentReference
-    ) external nonReentrant returns (uint256 paymentId) {
-        require(token != address(0), "PaymentSystem: use payNative for native asset");
+    /// @notice Pay an enabled ERC-20 token. The amount is the gross amount debited from payer.
+    /// @dev The recipient receives amount minus fee; the fee collector receives the fee.
+    function payToken(address token, address recipient, uint256 amount, bytes32 paymentReference)
+        external nonReentrant returns (uint256 paymentId)
+    {
+        require(token != address(0) && supportedTokens[token], "PaymentSystem: unsupported token");
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(amount > 0, "PaymentSystem: zero amount");
 
@@ -150,11 +150,36 @@ contract PaymentSystem is ReentrancyGuard {
             PaymentType.Direct, paymentReference, 0
         );
 
-        IERC20(token).safeTransferFrom(msg.sender, recipient, netAmount);
-        if (fee > 0) IERC20(token).safeTransferFrom(msg.sender, feeCollector, fee);
+        IERC20 asset = IERC20(token);
+        uint256 recipientBefore = asset.balanceOf(recipient);
+
+        if (recipient == feeCollector) {
+            uint256 collectorBefore = asset.balanceOf(feeCollector);
+            asset.safeTransferFrom(msg.sender, recipient, amount);
+            require(
+                asset.balanceOf(recipient) - recipientBefore == amount &&
+                asset.balanceOf(feeCollector) - collectorBefore == amount,
+                "PaymentSystem: unexpected token receipt"
+            );
+        } else {
+            uint256 collectorBefore = asset.balanceOf(feeCollector);
+            asset.safeTransferFrom(msg.sender, recipient, netAmount);
+            require(
+                asset.balanceOf(recipient) - recipientBefore == netAmount,
+                "PaymentSystem: recipient received unexpected amount"
+            );
+
+            if (fee > 0) {
+                asset.safeTransferFrom(msg.sender, feeCollector, fee);
+                require(
+                    asset.balanceOf(feeCollector) - collectorBefore == fee,
+                    "PaymentSystem: fee receipt mismatch"
+                );
+            }
+        }
     }
 
-    /// @notice Create native-asset escrow. Full amount is locked; no fee is charged in this initial version.
+    /// @notice Create native-asset escrow. The full amount is locked and no fee is charged.
     function payNativeWithEscrow(
         address payable recipient,
         uint256 amount,
@@ -177,7 +202,7 @@ contract PaymentSystem is ReentrancyGuard {
         );
     }
 
-    /// @notice Create ERC-20 escrow. Full amount is locked; no fee is charged in this initial version.
+    /// @notice Create ERC-20 escrow. Full amount is locked and no fee is charged.
     function payTokenWithEscrow(
         address token,
         address recipient,
@@ -188,11 +213,18 @@ contract PaymentSystem is ReentrancyGuard {
         bytes32 paymentReference
     ) external nonReentrant returns (uint256 paymentId, uint256 escrowId) {
         require(escrowManager != address(0), "PaymentSystem: escrow manager not set");
-        require(token != address(0), "PaymentSystem: invalid token");
+        require(token != address(0) && supportedTokens[token], "PaymentSystem: unsupported token");
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(amount > 0, "PaymentSystem: zero amount");
 
-        IERC20(token).safeTransferFrom(msg.sender, escrowManager, amount);
+        IERC20 asset = IERC20(token);
+        uint256 escrowBefore = asset.balanceOf(escrowManager);
+        asset.safeTransferFrom(msg.sender, escrowManager, amount);
+        require(
+            asset.balanceOf(escrowManager) - escrowBefore == amount,
+            "PaymentSystem: escrow received unexpected amount"
+        );
+
         escrowId = IEscrowManager(escrowManager).createEscrowFromPayment(
             msg.sender, recipient, token, amount, mode, deadline, resolver, paymentReference
         );
@@ -203,8 +235,8 @@ contract PaymentSystem is ReentrancyGuard {
         );
     }
 
-    /// @notice Start a token swap. The complete swap is intended to occur atomically.
-    /// @dev A real approved adapter must exist before this path can be used.
+    /// @notice Perform an atomic ERC-20 swap through an approved adapter.
+    /// @dev Both assets must be enabled. A real, reviewed adapter must be configured before use.
     function tradeTokens(
         address tokenIn,
         address tokenOut,
@@ -216,11 +248,21 @@ contract PaymentSystem is ReentrancyGuard {
         bytes32 tradeReference
     ) external nonReentrant returns (uint256 paymentId, uint256 tradeId, uint256 amountOut) {
         require(tradeExecutor != address(0), "PaymentSystem: trade executor not set");
-        require(tokenIn != address(0) && tokenOut != address(0), "PaymentSystem: invalid token");
+        require(
+            tokenIn != address(0) && tokenOut != address(0) &&
+            supportedTokens[tokenIn] && supportedTokens[tokenOut],
+            "PaymentSystem: unsupported trade token"
+        );
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(amountIn > 0, "PaymentSystem: zero amount");
 
-        IERC20(tokenIn).safeTransferFrom(msg.sender, tradeExecutor, amountIn);
+        IERC20 input = IERC20(tokenIn);
+        uint256 executorBefore = input.balanceOf(tradeExecutor);
+        input.safeTransferFrom(msg.sender, tradeExecutor, amountIn);
+        require(
+            input.balanceOf(tradeExecutor) - executorBefore == amountIn,
+            "PaymentSystem: trade executor received unexpected amount"
+        );
 
         (tradeId, amountOut) = ITradeExecutor(tradeExecutor).executeSwapFromPayment(
             msg.sender, tokenIn, tokenOut, amountIn, minAmountOut,
