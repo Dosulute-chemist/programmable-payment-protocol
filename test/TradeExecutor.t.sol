@@ -55,6 +55,26 @@ contract TradeExecutorTest is TestBase {
         assertEq(executor.tradeCount(), 0);
     }
 
+    function testSwapRevertsForExpiredDeadline() public {
+        vm.expectRevert();
+        payment.tradeTokens(
+            address(tokenIn), address(tokenOut), 1000, 1800,
+            block.timestamp - 1, recipient, address(adapter), bytes32("trade-expired")
+        );
+        assertEq(tokenIn.balanceOf(address(this)), 10_000);
+    }
+
+    function testAdapterFailureRevertsAndReturnsInput() public {
+        adapter.configure(1900, true);
+        vm.expectRevert();
+        payment.tradeTokens(
+            address(tokenIn), address(tokenOut), 1000, 1800,
+            block.timestamp + 1 hours, recipient, address(adapter), bytes32("trade-failed")
+        );
+        assertEq(tokenIn.balanceOf(address(this)), 10_000);
+        assertEq(executor.tradeCount(), 0);
+    }
+
     function testSwapRevertsForUnapprovedAdapter() public {
         MockTradeAdapter unapproved = new MockTradeAdapter();
         unapproved.configure(1900, false);
