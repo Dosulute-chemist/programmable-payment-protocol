@@ -51,7 +51,7 @@ contract AdversarialSecurityTest is TestBase {
         assertEq(escrow.claimable(address(this), address(0)), 0.6 ether);
         assertTrue(escrow.isSolvent(address(0)));
 
-        assertEq(uint256(escrow.getEscrow(escrowId).status), uint256(EscrowManager.EscrowStatus.Resolved));
+        assertEq(uint256(escrow.getEscrow(escrowId)), uint256(EscrowManager.EscrowStatus.Resolved));
     }
 
     function testOnlyPayerOrRecipientCanRaiseDispute() public {
@@ -78,7 +78,7 @@ contract AdversarialSecurityTest is TestBase {
 
         assertEq(escrow.totalEscrowed(address(0)), 0);
         assertEq(escrow.claimable(address(this), address(0)), 1 ether);
-        assertEq(uint256(escrow.getEscrow(escrowId).status),
+        assertEq(uint256(escrow.getEscrow(escrowId)),
             uint256(EscrowManager.EscrowStatus.Refunded));
     }
 
