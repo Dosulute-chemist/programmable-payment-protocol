@@ -80,3 +80,31 @@ contract DishonestTradeAdapter is ITradeAdapter {
         return reportedOutput;
     }
 }
+
+interface INativePaymentEntry {
+    function payNative(address payable recipient, bytes32 paymentReference)
+        external payable returns (uint256 paymentId);
+}
+
+contract ReenteringPaymentRecipient {
+    address public immutable payment;
+    bool public attempted;
+    bool public nestedSucceeded;
+
+    constructor(address paymentAddress) {
+        payment = paymentAddress;
+    }
+
+    receive() external payable {
+        if (!attempted) {
+            attempted = true;
+            (nestedSucceeded, ) = payment.call{value: address(this).balance}(
+                abi.encodeWithSelector(
+                    INativePaymentEntry.payNative.selector,
+                    payable(address(this)),
+                    bytes32("reentrant-attempt")
+                )
+            );
+        }
+    }
+}
