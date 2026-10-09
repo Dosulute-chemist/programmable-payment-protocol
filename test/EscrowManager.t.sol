@@ -34,10 +34,13 @@ contract EscrowManagerTest is TestBase {
             payable(recipient), 1 ether, IEscrowManager.SettlementMode.Resolver,
             0, resolver, bytes32("resolver-escrow")
         );
+        vm.prank(recipient);
+        escrow.raiseDispute(id, keccak256("dispute evidence hash"));
         uint256 beforeBalance = address(this).balance;
         vm.prank(resolver);
         escrow.refund(id);
-        assertEq(address(this).balance - beforeBalance, 1 ether);
+        assertEq(address(this).balance - beforeBalance, 0);
+        assertEq(escrow.claimable(address(this), address(0)), 1 ether);
         vm.expectRevert();
         vm.prank(resolver);
         escrow.refund(id);
