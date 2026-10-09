@@ -76,6 +76,7 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
 
     function setAdapter(address adapter, bool approved) external onlyOwner {
         require(adapter != address(0), "TradeExecutor: invalid adapter");
+        if (approved) require(adapter.code.length > 0, "TradeExecutor: adapter has no code");
         approvedAdapters[adapter] = approved;
         emit AdapterUpdated(adapter, approved);
     }
@@ -139,7 +140,12 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
             createdAt: block.timestamp
         });
 
+        uint256 recipientBefore = IERC20(tokenOut).balanceOf(recipient);
         IERC20(tokenOut).safeTransfer(recipient, outputReceived);
+        require(
+            IERC20(tokenOut).balanceOf(recipient) - recipientBefore == outputReceived,
+            "TradeExecutor: recipient received unexpected output"
+        );
 
         emit TradeExecuted(
             tradeId, trader, recipient, tokenIn, tokenOut,
