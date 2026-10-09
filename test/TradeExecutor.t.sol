@@ -33,10 +33,11 @@ contract TradeExecutorTest is TestBase {
 
     function testSwapDeliversActualOutput() public {
         uint256 outputBefore = tokenOut.balanceOf(recipient);
-        (uint256 paymentId, uint256 tradeId, uint256 amountOut) = payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp + 1 hours, recipient, address(adapter), bytes32("trade-1")
-        );
+        (uint256 paymentId, uint256 tradeId, uint256 amountOut) = payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("trade-1")
+        }));
         assertEq(amountOut, 1900);
         assertEq(tokenOut.balanceOf(recipient) - outputBefore, 1900);
         assertEq(executor.tradeCount(), 1);
@@ -47,30 +48,33 @@ contract TradeExecutorTest is TestBase {
 
     function testSwapRevertsWhenMinimumOutputNotMet() public {
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 2000,
-            block.timestamp + 1 hours, recipient, address(adapter), bytes32("trade-low")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 2000, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("trade-low")
+        }));
         assertEq(tokenIn.balanceOf(address(this)), 10_000);
         assertEq(executor.tradeCount(), 0);
     }
 
     function testSwapRevertsForExpiredDeadline() public {
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp - 1, recipient, address(adapter), bytes32("trade-expired")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp - 1,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("trade-expired")
+        }));
         assertEq(tokenIn.balanceOf(address(this)), 10_000);
     }
 
     function testAdapterFailureRevertsAndReturnsInput() public {
         adapter.configure(1900, true);
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp + 1 hours, recipient, address(adapter), bytes32("trade-failed")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("trade-failed")
+        }));
         assertEq(tokenIn.balanceOf(address(this)), 10_000);
         assertEq(executor.tradeCount(), 0);
     }
@@ -80,10 +84,11 @@ contract TradeExecutorTest is TestBase {
         unapproved.configure(1900, false);
         tokenOut.mint(address(unapproved), 2000);
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp + 1 hours, recipient, address(unapproved), bytes32("trade-unapproved")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(unapproved), tradeReference: bytes32("trade-unapproved")
+        }));
         assertEq(tokenIn.balanceOf(address(this)), 10_000);
     }
 }
