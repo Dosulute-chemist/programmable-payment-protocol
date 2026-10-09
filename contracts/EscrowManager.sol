@@ -38,6 +38,7 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
     address public paymentSystem;
     uint256 public escrowCount;
     mapping(uint256 => Escrow) public escrows;
+    mapping(address => uint256) public totalEscrowed;
 
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -102,8 +103,16 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
 
         if (token == address(0)) {
             require(msg.value == amount, "EscrowManager: incorrect native amount");
+            require(
+                address(this).balance >= totalEscrowed[address(0)] + amount,
+                "EscrowManager: native escrow underfunded"
+            );
         } else {
             require(msg.value == 0, "EscrowManager: native value not allowed");
+            require(
+                IERC20(token).balanceOf(address(this)) >= totalEscrowed[token] + amount,
+                "EscrowManager: token escrow underfunded"
+            );
         }
 
         if (mode == SettlementMode.PayerRelease) {
@@ -119,6 +128,7 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
             revert("EscrowManager: invalid settlement mode");
         }
 
+        totalEscrowed[token] += amount;
         escrowId = escrowCount++;
         escrows[escrowId] = Escrow({
             id: escrowId,
@@ -153,6 +163,7 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
         }
 
         escrow.status = EscrowStatus.Released;
+        totalEscrowed[escrow.token] -= escrow.amount;
         _sendFunds(escrow.token, escrow.recipient, escrow.amount);
         emit EscrowReleased(escrowId, escrow.recipient, escrow.amount);
     }
@@ -168,6 +179,7 @@ contract EscrowManager is IEscrowManager, ReentrancyGuard {
         );
 
         escrow.status = EscrowStatus.Refunded;
+        totalEscrowed[escrow.token] -= escrow.amount;
         _sendFunds(escrow.token, escrow.payer, escrow.amount);
         emit EscrowRefunded(escrowId, escrow.payer, escrow.amount);
     }
