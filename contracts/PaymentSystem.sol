@@ -41,7 +41,7 @@ contract PaymentSystem is ReentrancyGuard {
         uint256 createdAt;
     }
 
-    mapping(uint256 => Payment) public payments;
+    mapping(uint256 => Payment) private payments;
 
     event PaymentCreated(
         uint256 indexed paymentId,
