@@ -32,7 +32,7 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
     address public owner;
     address public paymentSystem;
     uint256 public tradeCount;
-    mapping(uint256 => Trade) public trades;
+    mapping(uint256 => Trade) private trades;
     mapping(address => bool) public approvedAdapters;
 
     event TradeExecuted(
