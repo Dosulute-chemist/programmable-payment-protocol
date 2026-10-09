@@ -184,4 +184,24 @@ contract AdversarialSecurityTest is TestBase {
         assertEq(tokenIn.balanceOf(address(this)), 5000);
         assertEq(executor.tradeCount(), 0);
     }
+
+    function testFuzzPartialDisputeSettlementPreservesLiabilities(uint96 amountSeed, uint96 awardSeed) public {
+        uint256 amount = uint256(amountSeed) + 1;
+        uint256 recipientAward = uint256(awardSeed) % (amount + 1);
+        vm.deal(address(this), amount);
+        (, uint256 id) = payment.payNativeWithEscrow{value: amount}(
+            payable(recipient), amount, IEscrowManager.SettlementMode.Resolver,
+            0, resolver, bytes32("fuzz-dispute")
+        );
+        vm.prank(recipient);
+        escrow.raiseDispute(id, keccak256("fuzz evidence"));
+        vm.prank(resolver);
+        escrow.resolveDispute(id, recipientAward);
+        assertEq(escrow.totalEscrowed(address(0)), 0);
+        assertEq(escrow.totalClaimable(address(0)), amount);
+        assertEq(escrow.claimable(recipient, address(0)), recipientAward);
+        assertEq(escrow.claimable(address(this), address(0)), amount - recipientAward);
+        assertTrue(escrow.isSolvent(address(0)));
+    }
+
 }
