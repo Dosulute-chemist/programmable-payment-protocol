@@ -83,73 +83,68 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
 
     /// @dev PaymentSystem transfers amountIn to this contract immediately before this call.
     /// The swap is atomic: if the adapter or output checks fail, the whole transaction reverts.
-    function executeSwapFromPayment(
-        address trader,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline,
-        address recipient,
-        address adapter,
-        bytes32 tradeReference
-    ) external nonReentrant onlyPaymentSystem returns (uint256 tradeId, uint256 amountOut) {
-        require(trader != address(0), "TradeExecutor: invalid trader");
-        require(tokenIn != address(0) && tokenOut != address(0), "TradeExecutor: invalid token");
-        require(tokenIn != tokenOut, "TradeExecutor: tokens must differ");
-        require(amountIn > 0 && minAmountOut > 0, "TradeExecutor: invalid amount");
-        require(recipient != address(0), "TradeExecutor: invalid recipient");
-        require(deadline >= block.timestamp, "TradeExecutor: expired deadline");
-        require(approvedAdapters[adapter], "TradeExecutor: adapter not approved");
+    function executeSwapFromPayment(ITradeExecutor.SwapRequest calldata request)
+        external nonReentrant onlyPaymentSystem returns (uint256 tradeId, uint256 amountOut)
+    {
+        require(request.trader != address(0), "TradeExecutor: invalid trader");
+        require(request.tokenIn != address(0) && request.tokenOut != address(0),
+            "TradeExecutor: invalid token");
+        require(request.tokenIn != request.tokenOut, "TradeExecutor: tokens must differ");
+        require(request.amountIn > 0 && request.minAmountOut > 0, "TradeExecutor: invalid amount");
+        require(request.recipient != address(0), "TradeExecutor: invalid recipient");
+        require(request.deadline >= block.timestamp, "TradeExecutor: expired deadline");
+        require(approvedAdapters[request.adapter], "TradeExecutor: adapter not approved");
 
-        uint256 inputBefore = IERC20(tokenIn).balanceOf(address(this));
-        require(inputBefore >= amountIn, "TradeExecutor: input not funded");
-        uint256 outputBefore = IERC20(tokenOut).balanceOf(address(this));
+        IERC20 input = IERC20(request.tokenIn);
+        IERC20 output = IERC20(request.tokenOut);
+        uint256 inputBefore = input.balanceOf(address(this));
+        require(inputBefore >= request.amountIn, "TradeExecutor: input not funded");
+        uint256 outputBefore = output.balanceOf(address(this));
 
-        IERC20(tokenIn).forceApprove(adapter, amountIn);
-        uint256 adapterReportedOut = ITradeAdapter(adapter).executeTrade(
-            tokenIn, tokenOut, amountIn, minAmountOut, address(this), deadline
+        input.forceApprove(request.adapter, request.amountIn);
+        uint256 adapterReportedOut = ITradeAdapter(request.adapter).executeTrade(
+            request.tokenIn, request.tokenOut, request.amountIn,
+            request.minAmountOut, address(this), request.deadline
         );
-        IERC20(tokenIn).forceApprove(adapter, 0);
+        input.forceApprove(request.adapter, 0);
 
-        uint256 inputAfter = IERC20(tokenIn).balanceOf(address(this));
-        uint256 outputAfter = IERC20(tokenOut).balanceOf(address(this));
+        uint256 inputAfter = input.balanceOf(address(this));
+        uint256 outputAfter = output.balanceOf(address(this));
         require(inputAfter <= inputBefore, "TradeExecutor: input balance increased unexpectedly");
 
         uint256 inputSpent = inputBefore - inputAfter;
         uint256 outputReceived = outputAfter - outputBefore;
-        require(inputSpent == amountIn, "TradeExecutor: adapter did not spend exact input");
-        require(outputReceived >= minAmountOut, "TradeExecutor: insufficient output");
+        require(inputSpent == request.amountIn, "TradeExecutor: adapter did not spend exact input");
+        require(outputReceived >= request.minAmountOut, "TradeExecutor: insufficient output");
         require(adapterReportedOut == outputReceived, "TradeExecutor: adapter output mismatch");
 
         tradeId = tradeCount++;
         amountOut = outputReceived;
 
-        // Assign fields individually to keep compiler stack usage predictable.
         Trade storage created = trades[tradeId];
         created.id = tradeId;
-        created.trader = trader;
-        created.tokenIn = tokenIn;
-        created.tokenOut = tokenOut;
-        created.amountIn = amountIn;
-        created.amountOut = amountOut;
-        created.minAmountOut = minAmountOut;
-        created.deadline = deadline;
-        created.recipient = recipient;
-        created.adapter = adapter;
-        created.tradeReference = tradeReference;
+        created.trader = request.trader;
+        created.tokenIn = request.tokenIn;
+        created.tokenOut = request.tokenOut;
+        created.amountIn = request.amountIn;
+        created.amountOut = outputReceived;
+        created.minAmountOut = request.minAmountOut;
+        created.deadline = request.deadline;
+        created.recipient = request.recipient;
+        created.adapter = request.adapter;
+        created.tradeReference = request.tradeReference;
         created.createdAt = block.timestamp;
 
-        uint256 recipientBefore = IERC20(tokenOut).balanceOf(recipient);
-        IERC20(tokenOut).safeTransfer(recipient, outputReceived);
+        uint256 recipientBefore = output.balanceOf(request.recipient);
+        output.safeTransfer(request.recipient, outputReceived);
         require(
-            IERC20(tokenOut).balanceOf(recipient) - recipientBefore == outputReceived,
+            output.balanceOf(request.recipient) - recipientBefore == outputReceived,
             "TradeExecutor: recipient received unexpected output"
         );
 
         emit TradeExecuted(
-            tradeId, trader, recipient, tokenIn, tokenOut,
-            amountIn, outputReceived, adapter, tradeReference
+            tradeId, request.trader, request.recipient, request.tokenIn, request.tokenOut,
+            request.amountIn, outputReceived, request.adapter, request.tradeReference
         );
     }
 
