@@ -148,10 +148,11 @@ contract AdversarialSecurityTest is TestBase {
         executor.setAdapter(address(adapter), true);
 
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp + 1 hours, recipient, address(adapter), bytes32("lying-adapter")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("lying-adapter")
+        }));
 
         assertEq(tokenIn.balanceOf(address(this)), 5000);
         assertEq(executor.tradeCount(), 0);
@@ -175,10 +176,11 @@ contract AdversarialSecurityTest is TestBase {
         executor.setAdapter(address(adapter), true);
 
         vm.expectRevert();
-        payment.tradeTokens(
-            address(tokenIn), address(tokenOut), 1000, 1800,
-            block.timestamp + 1 hours, recipient, address(adapter), bytes32("no-input-spend")
-        );
+        payment.tradeTokens(PaymentSystem.TradeRequest({
+            tokenIn: address(tokenIn), tokenOut: address(tokenOut), amountIn: 1000,
+            minAmountOut: 1800, deadline: block.timestamp + 1 hours,
+            recipient: recipient, adapter: address(adapter), tradeReference: bytes32("no-input-spend")
+        }));
 
         assertEq(tokenIn.balanceOf(address(this)), 5000);
         assertEq(executor.tradeCount(), 0);
