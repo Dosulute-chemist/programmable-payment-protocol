@@ -89,6 +89,7 @@ contract PaymentSystem is ReentrancyGuard {
 
     function setTokenSupported(address token, bool supported) external onlyOwner {
         require(token != address(0), "PaymentSystem: native asset uses address zero");
+        if (supported) require(token.code.length > 0, "PaymentSystem: token has no code");
         supportedTokens[token] = supported;
         emit TokenSupportUpdated(token, supported);
     }
@@ -141,7 +142,7 @@ contract PaymentSystem is ReentrancyGuard {
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(amount > 0, "PaymentSystem: zero amount");
 
-        uint256 fee = calculateFee(amount);
+        uint256 fee = recipient == feeCollector ? 0 : calculateFee(amount);
         uint256 netAmount = amount - fee;
         require(netAmount > 0, "PaymentSystem: amount too small");
 
@@ -154,12 +155,11 @@ contract PaymentSystem is ReentrancyGuard {
         uint256 recipientBefore = asset.balanceOf(recipient);
 
         if (recipient == feeCollector) {
-            uint256 collectorBefore = asset.balanceOf(feeCollector);
+            // If both roles are the same address, charge no separate fee and record the full amount.
             asset.safeTransferFrom(msg.sender, recipient, amount);
             require(
-                asset.balanceOf(recipient) - recipientBefore == amount &&
-                asset.balanceOf(feeCollector) - collectorBefore == amount,
-                "PaymentSystem: unexpected token receipt"
+                asset.balanceOf(recipient) - recipientBefore == amount,
+                "PaymentSystem: recipient received unexpected amount"
             );
         } else {
             uint256 collectorBefore = asset.balanceOf(feeCollector);
