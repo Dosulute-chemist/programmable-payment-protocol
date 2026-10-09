@@ -74,14 +74,14 @@ contract PaymentSystem is ReentrancyGuard {
     }
 
     function setEscrowManager(address newManager) external onlyOwner {
-        require(newManager != address(0), "PaymentSystem: invalid escrow manager");
+        require(newManager != address(0) && newManager.code.length > 0, "PaymentSystem: invalid escrow manager");
         address old = escrowManager;
         escrowManager = newManager;
         emit EscrowManagerUpdated(old, newManager);
     }
 
     function setTradeExecutor(address newExecutor) external onlyOwner {
-        require(newExecutor != address(0), "PaymentSystem: invalid trade executor");
+        require(newExecutor != address(0) && newExecutor.code.length > 0, "PaymentSystem: invalid trade executor");
         address old = tradeExecutor;
         tradeExecutor = newExecutor;
         emit TradeExecutorUpdated(old, newExecutor);
@@ -115,7 +115,7 @@ contract PaymentSystem is ReentrancyGuard {
         require(recipient != address(0), "PaymentSystem: invalid recipient");
         require(msg.value > 0, "PaymentSystem: zero amount");
 
-        uint256 fee = calculateFee(msg.value);
+        uint256 fee = recipient == feeCollector ? 0 : calculateFee(msg.value);
         uint256 netAmount = msg.value - fee;
         require(netAmount > 0, "PaymentSystem: amount too small");
 
