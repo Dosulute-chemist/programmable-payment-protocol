@@ -49,6 +49,27 @@ contract PaymentSystemTest is TestBase {
         assertEq(p.fee, 0);
     }
 
+    function testNativeRecipientEqualFeeCollectorReceivesFullAmount() public {
+        vm.deal(address(this), 2 ether);
+        uint256 beforeBalance = feeCollector.balance;
+        payment.payNative{value: 1 ether}(payable(feeCollector), bytes32("same-native-role"));
+        assertEq(feeCollector.balance - beforeBalance, 1 ether);
+    }
+
+    function testERC20EscrowLiabilityClearsOnRelease() public {
+        uint256 amount = 100_000;
+        token.approve(address(payment), amount);
+        (, uint256 escrowId) = payment.payTokenWithEscrow(
+            address(token), recipient, amount,
+            IEscrowManager.SettlementMode.PayerRelease, 0, address(0), bytes32("token-escrow")
+        );
+        assertEq(escrow.totalEscrowed(address(token)), amount);
+        assertEq(token.balanceOf(address(escrow)), amount);
+        escrow.release(escrowId);
+        assertEq(escrow.totalEscrowed(address(token)), 0);
+        assertEq(token.balanceOf(recipient), amount);
+    }
+
     function testUnsupportedTokenReverts() public {
         MockERC20 unsupported = new MockERC20("Unsupported", "NO");
         unsupported.mint(address(this), 1000);
