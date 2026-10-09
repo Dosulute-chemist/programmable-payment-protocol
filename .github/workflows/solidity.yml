@@ -16,7 +16,7 @@ jobs:
         with:
           version: stable
       - name: Install OpenZeppelin Contracts
-        run: forge install OpenZeppelin/openzeppelin-contracts --no-commit
+        run: forge install OpenZeppelin/openzeppelin-contracts@v5.4.0 --no-commit
       - name: Build contracts
         run: forge build --sizes
       - name: Run tests
