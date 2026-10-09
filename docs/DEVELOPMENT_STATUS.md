@@ -4,37 +4,39 @@ Last updated: 2026-10-09
 
 ## Current stage
 
-**Stage: Initial implementation, security hardening, and automated CI setup.**
+**Stage: Initial implementation, security hardening, and baseline CI verification.**
 
-The contracts and initial Foundry tests are committed. A GitHub Actions workflow now installs a pinned OpenZeppelin Contracts version, builds the contracts, and runs the test suite. The workflow must report success before the code can be called compiled and tested.
+GitHub Actions successfully compiled the current Solidity code with Solidity 0.8.24 and ran the current Foundry suite: **16 tests passed, 0 failed, 0 skipped** on commit `e9f77fb81b0ce93f0f4bd60519ccc75622a8a418`. See [the successful CI run](https://github.com/Dosulute-chemist/programmable-payment-protocol/actions/runs/37968203216).
+
+This confirms the code builds and the current tests pass. It does **not** establish that the contracts are secure, audited, or production-ready.
 
 ## Milestones
 
 | Area | Status | Notes |
 |---|---|---|
 | Project overview and architecture | Documented | Initial scope and module boundaries recorded |
-| Solidity project configuration | Added | Solidity 0.8.24 and optimizer configuration |
-| OpenZeppelin dependency | CI pin added | v5.4.0; workflow install/build result must be checked |
-| PaymentSystem | Implemented draft | Token allowlist, fee-accounting correction, transfer balance checks; not audited |
-| EscrowManager | Implemented draft | Per-asset locked-liability accounting and balance checks added; settlement design still limited |
-| TradeExecutor | Implemented draft | Atomic swap path, adapter allowlist, input/output checks; no real DEX adapter |
-| Unit/integration tests | Initial tests added | Must be run in CI and expanded with fuzz/invariant coverage |
-| CI | Added | .github/workflows/solidity.yml runs forge build --sizes and forge test -vvv |
-| Security review | Preliminary notes added | Not an independent audit |
+| Solidity project configuration | Added | Solidity 0.8.24, optimizer enabled, IR compilation enabled |
+| OpenZeppelin dependency | Pinned in CI | v5.4.0 |
+| PaymentSystem | Implemented draft; baseline tests pass | Native/ERC-20 transfers, token allowlist, fee accounting and transfer balance checks |
+| EscrowManager | Implemented draft; baseline tests pass | Per-asset locked-liability accounting and solvency checks added; settlement design remains limited |
+| TradeExecutor | Implemented draft; baseline tests pass | Atomic swap path, adapter allowlist, input/output checks; no real DEX adapter |
+| Unit/integration tests | Baseline suite passes | 16 tests; fuzz, invariant and broad malicious-contract testing still outstanding |
+| CI | Passing for the linked commit | Build and test workflow |
+| Security review | Preliminary notes added | Not an independent audit; Foundry lint warnings remain for review |
 | DEX adapter | Interface only | No real protocol-specific adapter implemented yet |
 | Indexer/API | Planned | Not implemented |
 | Deployment | Not deployed | No testnet or production deployment claimed |
 | Independent audit | Not audited | Required before production use |
 
-## Immediate next actions
+## Remaining security work
 
-1. Confirm the latest GitHub Actions run succeeded.
-2. Fix any compiler or test failures revealed by CI.
-3. Add adversarial tests: reentrant recipients, reverting recipients, malicious/non-standard tokens, multiple concurrent escrows per asset, and malicious adapters.
-4. Add fuzz and invariant tests for escrow liabilities and atomic trade accounting.
-5. Add two-step ownership transfer and decide multisig/timelock/pause requirements.
-6. Select a chain and DEX before implementing a real adapter.
-7. Obtain independent security review and audit before considering real funds.
+1. Review and address relevant Foundry lint warnings, distinguishing intentional exact balance-delta checks from actual risks.
+2. Add tests for re-entrant and reverting recipients, malicious/non-standard tokens, multiple concurrent escrows per asset, and malicious adapters.
+3. Add fuzz and invariant tests for escrow liabilities, authorization, and atomic trade accounting.
+4. Add two-step ownership transfer and decide multisig, timelock, and emergency-pause requirements.
+5. Add deployment scripts that assert module addresses and ownership configuration.
+6. Select a chain and DEX, then implement and test a real adapter on a test network.
+7. Obtain an independent security review and audit before considering real funds.
 
 ## Status definitions
 
