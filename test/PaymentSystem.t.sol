@@ -38,6 +38,17 @@ contract PaymentSystemTest is TestBase {
         assertEq(uint256(p.paymentType), uint256(PaymentSystem.PaymentType.Direct));
     }
 
+    function testRecipientEqualFeeCollectorIsRecordedWithoutDoubleCounting() public {
+        uint256 amount = 1_000_000;
+        token.approve(address(payment), amount);
+        uint256 beforeBalance = token.balanceOf(feeCollector);
+        uint256 paymentId = payment.payToken(address(token), feeCollector, amount, bytes32("same-role"));
+        assertEq(token.balanceOf(feeCollector) - beforeBalance, amount);
+        PaymentSystem.Payment memory p = payment.getPayment(paymentId);
+        assertEq(p.amount, amount);
+        assertEq(p.fee, 0);
+    }
+
     function testUnsupportedTokenReverts() public {
         MockERC20 unsupported = new MockERC20("Unsupported", "NO");
         unsupported.mint(address(this), 1000);
