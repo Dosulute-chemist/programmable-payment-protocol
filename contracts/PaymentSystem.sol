@@ -28,6 +28,17 @@ contract PaymentSystem is ReentrancyGuard {
     // ERC-20s must be explicitly enabled by the owner. Native currency uses address(0).
     mapping(address => bool) public supportedTokens;
 
+    struct TradeRequest {
+        address tokenIn;
+        address tokenOut;
+        uint256 amountIn;
+        uint256 minAmountOut;
+        uint256 deadline;
+        address recipient;
+        address adapter;
+        bytes32 tradeReference;
+    }
+
     struct Payment {
         uint256 id;
         address payer;
@@ -237,49 +248,42 @@ contract PaymentSystem is ReentrancyGuard {
 
     /// @notice Perform an atomic ERC-20 swap through an approved adapter.
     /// @dev Both assets must be enabled. A real, reviewed adapter must be configured before use.
-    function tradeTokens(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline,
-        address recipient,
-        address adapter,
-        bytes32 tradeReference
-    ) external nonReentrant returns (uint256 paymentId, uint256 tradeId, uint256 amountOut) {
+    function tradeTokens(TradeRequest calldata request)
+        external nonReentrant returns (uint256 paymentId, uint256 tradeId, uint256 amountOut)
+    {
         require(tradeExecutor != address(0), "PaymentSystem: trade executor not set");
         require(
-            tokenIn != address(0) && tokenOut != address(0) &&
-            supportedTokens[tokenIn] && supportedTokens[tokenOut],
+            request.tokenIn != address(0) && request.tokenOut != address(0) &&
+            supportedTokens[request.tokenIn] && supportedTokens[request.tokenOut],
             "PaymentSystem: unsupported trade token"
         );
-        require(recipient != address(0), "PaymentSystem: invalid recipient");
-        require(amountIn > 0, "PaymentSystem: zero amount");
+        require(request.recipient != address(0), "PaymentSystem: invalid recipient");
+        require(request.amountIn > 0, "PaymentSystem: zero amount");
 
-        IERC20 input = IERC20(tokenIn);
+        IERC20 input = IERC20(request.tokenIn);
         uint256 executorBefore = input.balanceOf(tradeExecutor);
-        input.safeTransferFrom(msg.sender, tradeExecutor, amountIn);
+        input.safeTransferFrom(msg.sender, tradeExecutor, request.amountIn);
         require(
-            input.balanceOf(tradeExecutor) - executorBefore == amountIn,
+            input.balanceOf(tradeExecutor) - executorBefore == request.amountIn,
             "PaymentSystem: trade executor received unexpected amount"
         );
 
-        ITradeExecutor.SwapRequest memory request = ITradeExecutor.SwapRequest({
+        ITradeExecutor.SwapRequest memory swapRequest = ITradeExecutor.SwapRequest({
             trader: msg.sender,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            amountIn: amountIn,
-            minAmountOut: minAmountOut,
-            deadline: deadline,
-            recipient: recipient,
-            adapter: adapter,
-            tradeReference: tradeReference
+            tokenIn: request.tokenIn,
+            tokenOut: request.tokenOut,
+            amountIn: request.amountIn,
+            minAmountOut: request.minAmountOut,
+            deadline: request.deadline,
+            recipient: request.recipient,
+            adapter: request.adapter,
+            tradeReference: request.tradeReference
         });
-        (tradeId, amountOut) = ITradeExecutor(tradeExecutor).executeSwapFromPayment(request);
+        (tradeId, amountOut) = ITradeExecutor(tradeExecutor).executeSwapFromPayment(swapRequest);
 
         paymentId = _recordPayment(
-            msg.sender, recipient, tokenIn, amountIn, 0,
-            PaymentType.Trade, tradeReference, tradeId
+            msg.sender, request.recipient, request.tokenIn, request.amountIn, 0,
+            PaymentType.Trade, request.tradeReference, tradeId
         );
     }
 
