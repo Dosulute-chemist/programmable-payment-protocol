@@ -61,14 +61,14 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
     }
 
     constructor(address initialPaymentSystem) {
-        require(initialPaymentSystem != address(0), "TradeExecutor: invalid PaymentSystem");
+        require(initialPaymentSystem != address(0) && initialPaymentSystem.code.length > 0, "TradeExecutor: invalid PaymentSystem");
         owner = msg.sender;
         paymentSystem = initialPaymentSystem;
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
     function updatePaymentSystem(address newPaymentSystem) external onlyOwner {
-        require(newPaymentSystem != address(0), "TradeExecutor: invalid PaymentSystem");
+        require(newPaymentSystem != address(0) && newPaymentSystem.code.length > 0, "TradeExecutor: invalid PaymentSystem");
         address old = paymentSystem;
         paymentSystem = newPaymentSystem;
         emit PaymentSystemUpdated(old, newPaymentSystem);
@@ -93,7 +93,7 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
         address recipient,
         address adapter,
         bytes32 tradeReference
-    ) external onlyPaymentSystem nonReentrant returns (uint256 tradeId, uint256 amountOut) {
+    ) external nonReentrant onlyPaymentSystem returns (uint256 tradeId, uint256 amountOut) {
         require(trader != address(0), "TradeExecutor: invalid trader");
         require(tokenIn != address(0) && tokenOut != address(0), "TradeExecutor: invalid token");
         require(tokenIn != tokenOut, "TradeExecutor: tokens must differ");
@@ -120,7 +120,7 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
         uint256 outputReceived = outputAfter - outputBefore;
         require(inputSpent == amountIn, "TradeExecutor: adapter did not spend exact input");
         require(outputReceived >= minAmountOut, "TradeExecutor: insufficient output");
-        require(adapterReportedOut >= minAmountOut, "TradeExecutor: adapter reported low output");
+        require(adapterReportedOut == outputReceived, "TradeExecutor: adapter output mismatch");
 
         tradeId = tradeCount++;
         amountOut = outputReceived;
