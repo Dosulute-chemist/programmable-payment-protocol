@@ -79,7 +79,7 @@ contract AdversarialSecurityTest is TestBase {
 
         assertEq(escrow.totalEscrowed(address(0)), 0);
         assertEq(escrow.claimable(address(this), address(0)), 1 ether);
-        assertEq(uint256(escrow.escrows(escrowId).status),
+        assertEq(uint256(escrow.getEscrow(escrowId).status),
             uint256(EscrowManager.EscrowStatus.Refunded));
     }
 
