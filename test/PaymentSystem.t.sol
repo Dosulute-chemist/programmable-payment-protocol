@@ -67,7 +67,9 @@ contract PaymentSystemTest is TestBase {
         assertEq(token.balanceOf(address(escrow)), amount);
         escrow.release(escrowId);
         assertEq(escrow.totalEscrowed(address(token)), 0);
-        assertEq(token.balanceOf(recipient), amount);
+        assertEq(token.balanceOf(recipient), 0);
+        assertEq(escrow.claimable(recipient, address(token)), amount);
+        assertEq(escrow.totalClaimable(address(token)), amount);
     }
 
     function testUnsupportedTokenReverts() public {
@@ -93,9 +95,9 @@ contract PaymentSystemTest is TestBase {
             payable(recipient), 1 ether, IEscrowManager.SettlementMode.PayerRelease,
             0, address(0), bytes32("escrow-1")
         );
-        uint256 beforeBalance = recipient.balance;
         escrow.release(escrowId);
-        assertEq(recipient.balance - beforeBalance, 1 ether);
+        assertEq(escrow.claimable(recipient, address(0)), 1 ether);
+        assertEq(escrow.totalClaimable(address(0)), 1 ether);
         vm.expectRevert();
         escrow.release(escrowId);
     }
