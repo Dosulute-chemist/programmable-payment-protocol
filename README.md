@@ -1,103 +1,119 @@
 # Programmable Payment Protocol
 
-A proposed blockchain-native financial infrastructure protocol for direct payments, escrow-based settlement, token swaps, and transaction tracking.
+Programmable blockchain-native payment infrastructure for direct payments, optional escrow settlement, and ERC-20 token swaps through explicitly approved adapters.
 
-> **Development status:** Early planning and architecture stage. The documentation describes the intended design. Contracts, integrations, and security controls must be implemented and verified before the protocol is considered usable. Do not use this project with real funds.
+> **Status: experimental / not production-ready.** Core contracts and security tests are under active development. The latest build must pass before this README's implementation claims are treated as verified. No independent security audit has been completed. Do not use real funds.
 
-## Vision
+## What it is
 
-Provide reusable on-chain payment infrastructure that other applications, businesses, and smart contracts can integrate without each building every payment primitive from scratch.
+The protocol is designed to give applications, businesses, wallets, marketplaces, and other smart contracts reusable on-chain payment building blocks, instead of requiring each integration to implement all payment logic itself.
 
-The protocol is intended to support:
-- Direct payments using a supported native asset or approved ERC-20 token.
-- Optional escrow flows for funds that must remain locked until defined conditions are met.
-- Token swaps through explicitly approved decentralized-exchange (DEX) adapters.
-- On-chain events that an off-chain indexer can consume for transaction history and integration services.
-- Clear interfaces and developer documentation for integrators.
+It is not a replacement for banks, card networks, or fiat payment providers. It is blockchain-native infrastructure that can be integrated into larger products.
 
-This is programmable blockchain infrastructure, not a claim to replace banks, card networks, or existing fiat payment providers.
+## Current contract features
 
-## Proposed architecture
+The following features are present in the current code, but remain subject to compilation, test verification, and security review:
 
-```text
-External applications / wallets / smart contracts
-                         |
-                         v
-                  PaymentSystem
-             Main integration entry point
-                         |
-             +-----------+-----------+
-             |           |           |
-             v           v           v
-        Direct pay    EscrowManager TradeExecutor
-             |           |           |
-             v           v           v
-        Recipient     Locked funds  Approved DEX adapter
-                                         |
-                                         v
-                                  DEX / liquidity pools
+- **Direct native-asset payments** using payable transactions.
+- **Direct ERC-20 payments** for tokens explicitly enabled by the protocol owner.
+- **Protocol fee accounting** with a configured fee collector. The current direct-payment fee is 1 basis point (0.01%); small amounts may round down to zero.
+- **Optional native-asset and ERC-20 escrow** with distinct settlement rules.
+- **Resolver-mode disputes** where a configured resolver can award the escrow fully to either party or split it between payer and recipient.
+- **Cancellation workflow** where the payer requests cancellation and the recipient can accept; the parties can also raise a dispute while eligible.
+- **Claimable-balance withdrawals** so settlement does not have to push funds immediately to a recipient contract. A user can withdraw to an alternative address if their original address cannot receive funds.
+- **Escrow liability accounting** with totals for locked and claimable amounts per asset, plus a solvency view.
+- **Payment and escrow identifiers** intended to link protocol payment records to module operations.
+- **ERC-20 swap routing** through an explicitly approved adapter, with a minimum-output requirement and deadline.
+- **On-chain events** intended to support an off-chain indexer for transaction history, monitoring, and integration services.
+- **Access controls and re-entrancy protection** on key entry points, with emergency pause controls in the escrow module.
 
-Payment and module events
-          |
-          v
-Off-chain indexer -> API / webhooks / dashboard (supporting services)
-```
+### Important feature limitations
 
-The diagram is conceptual. The components must be implemented, integrated, tested, and reviewed before the complete flow exists.
+- The repository does **not** yet include a production-ready real DEX adapter. The adapter interface and mock adapters are not proof of a working real-world DEX integration.
+- Native currency is supported for direct payment and escrow paths; the current trade path is ERC-20-to-ERC-20 only.
+- The contracts do not directly move ordinary bank balances or fiat currencies such as NGN, USD, or EUR. Fiat support would require a separate payment-provider or properly designed tokenized-asset integration.
+- A token being ERC-20-compatible does not make it trustworthy. Token addresses differ by network, and only explicitly supported tokens should be used.
+- The escrow resolver is a trusted role. Its decisions can affect the distribution of disputed funds; production governance and resolver-selection rules need careful design.
+- A single owner address is not a multisig. Multisig administration and any timelock must be configured and tested as part of deployment governance.
+- Events can be indexed off-chain, but an indexer/API/dashboard is a separate service and is not included as a complete production service in this repository.
 
-## Planned modules
-
-- **PaymentSystem:** entry point for direct payments and routing supported payment operations.
-- **EscrowManager:** holds supported assets under explicit release, refund, cancellation, and dispute rules.
-- **TradeExecutor:** coordinates token swaps through allowlisted adapters and enforces trade constraints such as minimum output and deadlines.
-- **DEX adapters:** network- and protocol-specific integrations. An interface alone is not a working DEX integration.
-- **Indexer and integration services:** off-chain services that read on-chain events and expose searchable history or notifications. They do not determine on-chain settlement truth.
-
-## Asset model
-
-- Native assets are received through payable calls and represented by `msg.value`.
-- ERC-20 assets are moved through their token contracts, commonly using `transferFrom` after the user has approved a spender.
-- Token addresses are network-specific. A token symbol such as USDT or USDC is not enough to identify a trusted asset.
-- Ordinary bank balances in currencies such as NGN, USD, or EUR are not directly accessible to Solidity contracts. They require a separate regulated payment-provider or tokenized-asset integration.
-
-## Proposed repository layout
+## Architecture
 
 ```text
-contracts/
-  PaymentSystem.sol
-  EscrowManager.sol
-  TradeExecutor.sol
-  interfaces/
-  adapters/
-test/
-script/
-docs/
-  PROJECT_PLAN.md
-  ARCHITECTURE.md
-  CONTRACT_DESIGN.md
-  ASSET_SUPPORT.md
-  SECURITY.md
-  INTEGRATION_FLOW.md
+External application / wallet / smart contract
+                     |
+                     v
+                PaymentSystem
+               /      |      \
+              v       v       v
+        Direct pay  Escrow  TradeExecutor
+              |    Manager       |
+              v       |           v
+          Recipient   |      Approved adapter
+                      |           |
+               Locked /            v
+              claimable funds    DEX / pools
+                     |
+                     v
+          Payment and module events
+                     |
+                     v
+        Future off-chain indexer / API
 ```
 
-The layout may evolve as implementation choices are finalized.
+- **PaymentSystem** is the primary integration entry point.
+- **EscrowManager** holds escrowed assets and tracks settlement liabilities.
+- **TradeExecutor** checks trade constraints and calls an approved adapter.
+- **DEX adapters** are network- and DEX-specific integrations and require their own review.
+- **Indexer/API/webhooks/dashboard** are supporting off-chain components and must be implemented separately.
+
+## How assets move
+
+### Native assets
+
+A user sends native currency with a payable transaction. The amount is available to the called contract as `msg.value`. No ERC-20 approval is involved.
+
+### ERC-20 tokens
+
+A user generally approves a spender on the token contract first. Approval sets a spending allowance; it does not itself transfer tokens. A later transaction can use `transferFrom` to move tokens according to that allowance.
+
+### Token swaps
+
+The current trade path transfers an enabled input token to the TradeExecutor and requests a swap through an approved adapter. The adapter is expected to interact with a DEX or liquidity source. The protocol checks the actual output against the minimum output specified by the caller. A real adapter and real liquidity integration still need to be implemented, tested, and reviewed.
+
+## Security and testing
+
+Security work in the repository includes adversarial test cases for scenarios such as unauthorized escrow actions, repeat settlement, partial dispute awards, fee-on-transfer tokens, dishonest adapters, minimum-output enforcement, and accounting conservation.
+
+These tests are **not an exhaustive attack assessment**, and they must not be described as passing unless the current CI run confirms that. See:
+
+- [Security review scope and external audit brief](docs/EXTERNAL_AUDIT_SCOPE.md)
+- [Development status and known blockers](docs/DEVELOPMENT_STATUS.md)
+- [GitHub Actions CI](https://github.com/Dosulute-chemist/programmable-payment-protocol/actions)
+
+Before any production use, the project needs a clean reproducible build, a passing complete test suite, additional fuzz/invariant testing, a reviewed real DEX adapter, deployment/governance review, and an independent audit of the exact release commit.
+
+## Development setup
+
+This repository uses Foundry and Solidity 0.8.24. OpenZeppelin Contracts are installed by the CI workflow.
+
+Typical local commands after installing Foundry and dependencies:
+
+```bash
+forge build --sizes
+forge test -vvv
+```
 
 ## Development roadmap
 
-1. Define requirements, trust assumptions, asset support, and module boundaries.
-2. Implement and review core direct payment flows.
-3. Implement escrow accounting and settlement rules.
-4. Integrate trade funding, execution, refunds, and a real DEX adapter.
-5. Add tests, deployment scripts, and reproducible configuration.
-6. Build event indexing and integrator documentation.
-7. Conduct security review and test on a test network before considering any production deployment.
-
-See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+1. Resolve current build and test failures.
+2. Run and expand adversarial, fuzz, and invariant tests.
+3. Review token support assumptions and administrative trust boundaries.
+4. Implement and test a real DEX adapter on a test network.
+5. Add deployment scripts and safe module-configuration checks.
+6. Implement indexer and integration documentation.
+7. Obtain an independent security audit and retest findings before considering production deployment.
 
 ## Security notice
 
-This project is not audited and must be treated as experimental. Never put private keys, seed phrases, API secrets, or production credentials in the repository. Do not deploy unreviewed contracts with real funds. External DEX adapters and arbitrary token contracts introduce additional risks.
-
-## Contributions and decisions
-
-Document design changes and important security assumptions. Any statement that a feature is complete should be backed by implementation and test evidence.
+This code is experimental and unaudited. Do not use real funds or deploy to production. Never commit private keys, seed phrases, API secrets, or production credentials.
