@@ -125,20 +125,20 @@ contract TradeExecutor is ITradeExecutor, ReentrancyGuard {
         tradeId = tradeCount++;
         amountOut = outputReceived;
 
-        trades[tradeId] = Trade({
-            id: tradeId,
-            trader: trader,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            amountIn: amountIn,
-            amountOut: amountOut,
-            minAmountOut: minAmountOut,
-            deadline: deadline,
-            recipient: recipient,
-            adapter: adapter,
-            tradeReference: tradeReference,
-            createdAt: block.timestamp
-        });
+        // Assign fields individually to keep compiler stack usage predictable.
+        Trade storage created = trades[tradeId];
+        created.id = tradeId;
+        created.trader = trader;
+        created.tokenIn = tokenIn;
+        created.tokenOut = tokenOut;
+        created.amountIn = amountIn;
+        created.amountOut = amountOut;
+        created.minAmountOut = minAmountOut;
+        created.deadline = deadline;
+        created.recipient = recipient;
+        created.adapter = adapter;
+        created.tradeReference = tradeReference;
+        created.createdAt = block.timestamp;
 
         uint256 recipientBefore = IERC20(tokenOut).balanceOf(recipient);
         IERC20(tokenOut).safeTransfer(recipient, outputReceived);
