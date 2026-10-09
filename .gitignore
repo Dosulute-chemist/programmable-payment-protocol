@@ -1,0 +1,21 @@
+# Foundry
+out/
+cache/
+broadcast/
+coverage/
+lcov.info
+
+# Dependencies
+lib/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
