@@ -264,10 +264,18 @@ contract PaymentSystem is ReentrancyGuard {
             "PaymentSystem: trade executor received unexpected amount"
         );
 
-        (tradeId, amountOut) = ITradeExecutor(tradeExecutor).executeSwapFromPayment(
-            msg.sender, tokenIn, tokenOut, amountIn, minAmountOut,
-            deadline, recipient, adapter, tradeReference
-        );
+        ITradeExecutor.SwapRequest memory request = ITradeExecutor.SwapRequest({
+            trader: msg.sender,
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            amountIn: amountIn,
+            minAmountOut: minAmountOut,
+            deadline: deadline,
+            recipient: recipient,
+            adapter: adapter,
+            tradeReference: tradeReference
+        });
+        (tradeId, amountOut) = ITradeExecutor(tradeExecutor).executeSwapFromPayment(request);
 
         paymentId = _recordPayment(
             msg.sender, recipient, tokenIn, amountIn, 0,
